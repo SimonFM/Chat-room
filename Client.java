@@ -109,7 +109,9 @@ public class Client  {
 	 */
 	void sendMessage(ChatMessage msg_chat) throws Exception {
 		try {
-			sOutput.writeObject(new ChatMessage(msg_chat.getType(),doEncrypt(msg_chat.getMessage()+"\n")));
+			String e = doEncrypt(msg_chat.getMessage());
+			String d = doDecrypt(e);
+			sOutput.writeObject(new ChatMessage(msg_chat.getType(),d));
 		}
 		catch(IOException e) {
 			display("Exception writing to server: " + e);
@@ -140,7 +142,7 @@ public class Client  {
 	// original
 	private String encrypt(String plainText) throws Exception{
 		String encryptionKey = "Bar12345Bar12345";
-		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(), "AES");
+		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(),"AES");
 		Cipher cipher = Cipher.getInstance("AES");
 		cipher.init(Cipher.ENCRYPT_MODE, aesKey);
 		
@@ -148,21 +150,21 @@ public class Client  {
 	}
 
 	public String doDecrypt(String cipher) throws Exception{
-		return decrypt(cipher.getBytes());
+		return decrypt(cipher);
 	}
 	
 	
-	private String decrypt(byte[] cipherText) throws Exception{
+	private String decrypt(String cipherText) throws Exception{
 		String encryptionKey = "Bar12345Bar12345";
-		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(), "AES");
+		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(),"AES");
 		Cipher cipher = Cipher.getInstance("AES");
 		cipher.init(Cipher.DECRYPT_MODE, aesKey);
 		
-		return new String(cipher.doFinal(cipherText));
+		return new String(cipher.doFinal(cipherText.getBytes()));
 	}
 	
 	/*
-	 * a class that waits for the message from the server and append them to the JTextArea
+	 * A class that waits for the message from the server and append them to the JTextArea
 	 * if we have a GUI or simply System.out.println() it in console mode
 	 */
 	class ListenFromServer extends Thread {

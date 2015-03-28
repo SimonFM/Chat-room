@@ -148,13 +148,17 @@ public class ClientGUI extends JFrame implements ActionListener {
 
 			// just have to send the message
 			String toEncrypt = tf.getText();
-			try {
-				client.sendMessage(new ChatMessage(ChatMessage.MESSAGE, toEncrypt));				
-				tf.setText("");
-				return;
-			} catch (Exception e1) {
-				e1.printStackTrace();
+			if(toEncrypt.equals("") || toEncrypt.equalsIgnoreCase(" ")){}
+			else{
+				try {
+					client.sendMessage(new ChatMessage(ChatMessage.MESSAGE, toEncrypt));				
+					tf.setText("");
+					return;
+				} catch (Exception e1) {
+					e1.printStackTrace();
+				}
 			}
+			
 
 		}
 
@@ -188,10 +192,4 @@ public class ClientGUI extends JFrame implements ActionListener {
 		}
 
 	}
-	
-	// to start the whole thing the server
-	public static void main(String[] args) {
-		new ClientGUI("localhost", 12345,"poop");
-	}
-
 }
