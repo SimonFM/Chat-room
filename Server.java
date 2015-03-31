@@ -1,6 +1,14 @@
 /*
  * This program was taken from here. I do not claim to have made it.
- * I modified it to add encryption to messages.
+ * Hitesh said we were allowed to use it.
+ * I modified it to add encryption to messages and a group implementation.
+ * Methods I added:
+ * 		lookUp()
+ * 		addToGroup()
+ *		removeFromGroup()
+ * 		sendNewAESKey()
+ * 		resetAESKey()
+ * 
  * http://www.dreamincode.net/forums/topic/259777-a-simple-chat-program-with-clientserver-gui-optional/
  */
 
@@ -12,6 +20,7 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.Key;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -21,8 +30,12 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Date;
-
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
@@ -47,16 +60,16 @@ public class Server {
 	// the boolean that will be turned of to stop the server
 	private boolean keepGoing;
 	private Group myGroup;
-	private boolean encryptionEnabled;
 	public static TrustManager[] trustManager;
 	public static KeyStore keystore;
 	public static KeyManagerFactory keyManFact;
-
 	private SSLSocket socket;
 	private SSLContext context;
 	private SSLServerSocketFactory sslSocketFactory;
+	private SecretKey defaultKey, groupKey;
+	private boolean groupDeclared;
 
-	/*
+	/*		
 	 * server constructor that receive the port to listen to for connection as
 	 * parameter in console
 	 */
@@ -64,10 +77,39 @@ public class Server {
 		this.port = port;
 		sdf = new SimpleDateFormat("HH:mm:ss");
 		al = new ArrayList<ClientThread>();
-		myGroup = new Group();
-		encryptionEnabled = false;
-		String keyName = "clientkeystore";
-		char[] password = "123456".toCharArray();
+		myGroup = new Group(); //  A group in the server
+		groupDeclared = false;
+
+		/* this is a key generator that creates a default key and then a
+		   group key, if I wanted more groups then i could simply add in 
+	       an array list of keys or have this app connect to a database of 
+		   some kind. It uses AES encryption.
+		 */
+		KeyGenerator KeyGen;
+		try {
+			KeyGen = KeyGenerator.getInstance("AES");
+			KeyGen.init(128); // initial it with 128 bit key
+			defaultKey = KeyGen.generateKey();
+			groupKey = KeyGen.generateKey();
+		} catch (NoSuchAlgorithmException e1) {
+			e1.printStackTrace();
+		}
+
+
+		// the name of the keystore
+		String keyName = "supersecretkeystore";
+		// the password of the keystore
+		char[] password = "itsasecret".toCharArray();
+
+		/*
+		 * This long try catch statement sets up the key store and the SSL sockets
+		 * using X509 certificates
+		 * To set up the keystore I had to enter in a 'keytool' command and make a 
+		 * keystore file from which the public and private keys are stored for both
+		 * the clients and the server.
+		 * If this were a proper chat room, then each client would have its own keystore
+		 * the same would apply to the server.
+		 */
 		try {
 			keystore = KeyStore.getInstance("JKS");
 			keystore.load(new FileInputStream(keyName), password);
@@ -88,12 +130,12 @@ public class Server {
 				}
 			} };
 		} catch (UnrecoverableKeyException e) {e.printStackTrace();}
-		  catch (KeyStoreException e) {e.printStackTrace();}
-		  catch (NoSuchAlgorithmException e) {e.printStackTrace();}
-		  catch (CertificateException e) {e.printStackTrace();}
-		  catch (FileNotFoundException e) {e.printStackTrace();}
-		  catch (IOException e) {e.printStackTrace();}
-		  catch (KeyManagementException e) {e.printStackTrace();
+		catch (KeyStoreException e) {e.printStackTrace();}
+		catch (NoSuchAlgorithmException e) {e.printStackTrace();}
+		catch (CertificateException e) {e.printStackTrace();}
+		catch (FileNotFoundException e) {e.printStackTrace();}
+		catch (IOException e) {e.printStackTrace();}
+		catch (KeyManagementException e) {e.printStackTrace();
 		}
 	}
 
@@ -102,8 +144,7 @@ public class Server {
 		/* create socket server and wait for connection requests */
 		try {
 			// the socket used by the server
-			ServerSocket serverSocket = (SSLServerSocket) sslSocketFactory
-					.createServerSocket(12345);
+			ServerSocket serverSocket = (SSLServerSocket) sslSocketFactory.createServerSocket(12345);
 
 			// infinite loop to wait for connections
 			while (keepGoing) {
@@ -111,8 +152,7 @@ public class Server {
 				// if I was asked to stop
 				if (!keepGoing)
 					break;
-				ClientThread t = new ClientThread(socket); // make a thread of
-															// it
+				ClientThread t = new ClientThread(socket); // make a thread of it
 				al.add(t); // save it in the ArrayList
 				t.start();
 			}
@@ -134,26 +174,46 @@ public class Server {
 			String msg = sdf.format(new Date())+ " Exception on new ServerSocket: " + e + "\n";
 		}
 	}
-
-	public void enableEncryption(){encryptionEnabled = true;}
-
-	public void disableEncryption(){encryptionEnabled = false;}
-
-	public void addToGroup(String name){myGroup.addMember(name);}
-
-	public void removeFromGroup(String name){myGroup.removeMember(name);}
-
-	/*
-	 * For the GUI to stop the server
+	
+	/**
+	 * Looks up a client if there is a thread with that username
+	 * @param name
+	 * @return true or false
 	 */
-	protected void stop() throws IOException {
-		keepGoing = false;
-		// connect to myself as Client to exit statement
-		ServerSocket serverSocket = new ServerSocket(100);
-		Socket socket = serverSocket.accept();
-		try {
-			new Socket("localhost", 100);
-		} catch (Exception e) {e.printStackTrace();}
+	boolean lookUp(String name){
+		for(ClientThread t : al){
+			if(t.username.equals(name)) return true;
+		}
+		return false;
+	}
+	/**
+	 * This method adds users to a group that in made in the server
+	 * @param name - name of the user to add to the group
+	 */
+	public void addToGroup(String name){
+		if(lookUp(name)){
+			myGroup.addMember(name);
+			for(ClientThread t : al){
+				if(name.equals(t.username)) sendNewAESKey(t.id);
+			}
+		}
+		else{
+			System.out.println("That person does not exist...");
+		}
+		
+	}
+
+	/**
+	 * This method removes users from a group that in made in the server
+	 * @param name - name of the user to add to the group
+	 */
+	public void removeFromGroup(String name){
+		myGroup.removeMember(name);
+		for(ClientThread t : al){
+			if(name.equals(t.username)){
+				resetAESKey(t.id);
+			}
+		}
 	}
 
 	/*
@@ -172,6 +232,39 @@ public class Server {
 			if (!ct.writeMsg(messageLf)) al.remove(i);
 		}
 	}
+	/**
+	 * This method sends the client a new AES key, which is that of the new group.
+	 * It is sent as a message, but since it is using SSL socket I do not have to 
+	 * worry about sending public and private keys. They are taken care of by the 
+	 * constructor.
+	 * @param id
+	 */
+	public void sendNewAESKey(int id){
+		String encodedKey = Base64.getEncoder().encodeToString(groupKey.getEncoded());
+		ClientThread ct;
+		encodedKey = "AES:" + encodedKey;
+		for (ClientThread t : al){
+			if(t.id == id){
+				ct = t;
+				t.writeMsg(encodedKey);
+			}
+		}
+	}
+	/**
+	 * This method resets the client's AES key to the default one inside the
+	 * client class. 
+	 * @param id - Client you want to reset
+	 */
+	public void resetAESKey(int id){
+		ClientThread ct;
+		String encodedKey = "AES:Reset";
+		for (ClientThread t : al){
+			if(t.id == id){
+				ct = t;
+				t.writeMsg(encodedKey);
+			}
+		}
+	}
 
 	// for a client who logged off using the LOGOUT message
 	synchronized void remove(int id) {
@@ -181,6 +274,7 @@ public class Server {
 			// found it
 			if (ct.id == id) {
 				al.remove(i);
+				myGroup.removeMember(ct.getName());
 				return;
 			}
 		}
@@ -228,7 +322,7 @@ public class Server {
 				try {
 					cm = (ChatMessage) sInput.readObject();
 				} catch (IOException e){break;} 
-				  catch (ClassNotFoundException e2){break;}
+				catch (ClassNotFoundException e2){break;}
 				// the messaage part of the ChatMessage
 				String message = cm.getMessage();
 				// Switch on the type of message receive
@@ -254,7 +348,6 @@ public class Server {
 			remove(id);
 			close();
 		}
-
 		// try to close everything
 		private void close() {
 			// try to close the connection

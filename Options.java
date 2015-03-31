@@ -1,6 +1,7 @@
-/**
+/*
  * This class acts like an Management console for the Server
- * 
+ * I made this GUI to manage the server, so from adding clients to groups 
+ * and from removing them from a group.
  */
 
 import javax.swing.*;
@@ -23,7 +24,6 @@ import java.awt.event.KeyEvent;
 
 public class Options implements Runnable{
 	private JFrame frame;
-	TextArea consolePanel;
 	Server server;
 	ArrayList<ClientGUI> clients;
 
@@ -38,24 +38,16 @@ public class Options implements Runnable{
 	private void initialize(){
 		server = new Server(12345);
 		clients = new ArrayList<ClientGUI>();
-		consolePanel = new TextArea();
-		consolePanel.setEditable(false);
 
 		frame = new JFrame("Management Console");
-		frame.setBounds(100, 100, 450, 542);
+		frame.setBounds(100, 100, 450, 292);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.getContentPane().setLayout(null);
 		frame.setVisible(true);
 		frame.setResizable(false);
 
-		consolePanel.setFont(new Font("Arial", Font.PLAIN, 12));
-		consolePanel.setForeground(Color.BLACK);
-		consolePanel.setBackground(Color.WHITE);
-		consolePanel.setBounds(0, 343, 444, 170);
-		consolePanel.setText("");
-
 		List memberList = new List();
-		memberList.setBounds(10, 41, 170, 285);
+		memberList.setBounds(10, 41, 170, 189);
 
 		TextField kickTextField = new TextField();
 		kickTextField.addActionListener(new ActionListener(){
@@ -123,31 +115,13 @@ public class Options implements Runnable{
 		addButton.setBounds(197, 82, 70, 22);
 		
 		TextField encryptionTextField = new TextField();
-		encryptionTextField.setBounds(197, 277, 221, 22);
+		encryptionTextField.setBounds(197, 188, 221, 22);
 		encryptionTextField.addActionListener(new ActionListener(){
 			public void actionPerformed(ActionEvent e){
+				String s = encryptionTextField.getText();
+				server.addToGroup(s);
 				encryptionTextField.setText(" ");
 			}});
-		
-		
-		Button enableEncryption = new Button("Enable");
-		enableEncryption.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent arg0) {
-				server.disableEncryption();
-				
-			}
-		});
-		enableEncryption.setBounds(197, 175, 70, 22);
-
-		Button disableEncryption = new Button("Disable");
-		disableEncryption.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseClicked(MouseEvent e) {
-				server.enableEncryption();
-			}
-		});
-		disableEncryption.setBounds(281, 175, 70, 22);
 
 		
 
@@ -155,14 +129,13 @@ public class Options implements Runnable{
 		addToEncrypt.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mouseClicked(MouseEvent e) {
+				String s = encryptionTextField.getText();
+				server.addToGroup(s);
 				encryptionTextField.setText(" ");
 			}
 		});
 
-		addToEncrypt.setBounds(197, 249, 70, 22);
-
-		Label encryptionLabel = new Label("Encryption Enabling");
-		encryptionLabel.setBounds(197, 139, 174, 22);
+		addToEncrypt.setBounds(197, 147, 70, 22);
 
 		Label managementLabel = new Label("Management");
 		
@@ -170,14 +143,10 @@ public class Options implements Runnable{
 		managementLabel.setBounds(197, 13, 107, 22);
 		frame.getContentPane().add(kickButton);
 		frame.getContentPane().add(memberList);
-		frame.getContentPane().add(consolePanel);
 		frame.getContentPane().add(addToEncrypt);
 		frame.getContentPane().add(loggedInLabel);
 		frame.getContentPane().add(addTextField);
 		frame.getContentPane().add(addButton);
-		frame.getContentPane().add(disableEncryption);
-		frame.getContentPane().add(enableEncryption);
-		frame.getContentPane().add(encryptionLabel);
 		frame.getContentPane().add(managementLabel);
 		frame.getContentPane().add(encryptionTextField);
 		
@@ -189,11 +158,9 @@ public class Options implements Runnable{
 				encryptionTextField.setText(" ");
 			}
 		});
-		RemoveFromGroupButton.setBounds(280, 249, 71, 22);
+		RemoveFromGroupButton.setBounds(286, 147, 71, 22);
 		frame.getContentPane().add(RemoveFromGroupButton);
-		
-		JLabel addToGroupLabel = new JLabel("New label");
-		addToGroupLabel.setBounds(197, 221, 200, 22);
-		frame.getContentPane().add(addToGroupLabel);
+		frame.setResizable(false);
+
 	}
 }

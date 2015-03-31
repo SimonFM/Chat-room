@@ -1,5 +1,5 @@
 /*
- * This class was made by me.
+ * This creates and initialises my program.
  */
 public class MyChat {
 	public static void main(String args[]){

@@ -1,6 +1,6 @@
 /*
  * This program was taken from here. I do not claim to have made it.
- * Hitesh said to a class mate that we were allowed to use it.
+ * Hitesh said we were allowed to use it.
  * http://www.dreamincode.net/forums/topic/259777-a-simple-chat-program-with-clientserver-gui-optional/
  */
 import java.io.*;
@@ -17,7 +17,8 @@ public class ChatMessage implements Serializable {
 	// WHOISIN to receive the list of the users connected
 	// MESSAGE an ordinary message
 	// LOGOUT to disconnect from the Server
-	static final int WHOISIN = 0, MESSAGE = 1, LOGOUT = 2;
+	static final int WHOISIN = 0, MESSAGE = 1, 
+					 LOGOUT = 2, KEYMESSAGE = 3;
 	private int type;
 	private String message;
 	

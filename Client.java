@@ -1,11 +1,23 @@
 /*
  * This program was taken from here. I do not claim to have made it.
- * Hitesh said to a class mate that we were allowed to use it.
+ * Hitesh said we were allowed to use it.
  * I modified it in order to encrpt and decrypt messages
+ * 	Methods I added:
+ * 		encrypt()
+ * 		doEcrypt()
+ * 		decrypt()
+ * 		doDecrypt()
+ * 		getUsername()
+ *      resetKey()
+ *      updateKey()
+ *      
  * http://www.dreamincode.net/forums/topic/259777-a-simple-chat-program-with-clientserver-gui-optional/
  */
 import java.net.*;
 import java.io.*;
+import java.security.AlgorithmParameters;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
@@ -16,7 +28,11 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.*;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.KeyManagerFactory;
@@ -30,24 +46,21 @@ import javax.net.ssl.X509TrustManager;
  * The Client that can be run both as a console or a GUI
  */
 public class Client {
-
-	// for I/O
 	private ObjectInputStream sInput; // to read from the socket
 	private ObjectOutputStream sOutput; // to write on the socket
-	// private Socket socket;
 	private SSLSocket socket;
 	private SSLContext context;
 	private SSLSocketFactory sslSocketFactory;
 	public static TrustManager[] myTrustManager;
 	public static KeyStore keystore;
 	public static KeyManagerFactory keyManFact;
-	
-	// if I use a GUI or not
 	private ClientGUI cg;
 
 	// the server, the port and the username
 	private String server, username;
 	private int port;
+	private String defaultKey = "Bar12345Bar12345";
+	private SecretKey key;
 
 	/*
 	 * Constructor called by console mode server: the server address port: the
@@ -68,8 +81,18 @@ public class Client {
 		this.username = username;
 		// save if we are in GUI mode or not
 		this.cg = cg;
-		char[] password = "123456".toCharArray();
-		String keyStoreName = "clientkeystore";
+		key = new SecretKeySpec(defaultKey.getBytes(), "AES");
+		char[] password = "itsasecret".toCharArray();
+		String keyStoreName = "supersecretkeystore";
+		/*
+		 * Much like the server's implementationThis long try catch statement sets up
+		 * the key store and the SSL sockets using X509 certificates
+		 * To set up the keystore I had to enter in a 'keytool' command and make a 
+		 * keystore file from which the public and private keys are stored for both
+		 * the clients and the server.
+		 * If this were a proper chat room, then each client would have its own keystore
+		 * the same would apply to the server.
+		 */
 		try {
 			myTrustManager = new TrustManager[] { new X509TrustManager() {
 				public java.security.cert.X509Certificate[] getAcceptedIssuers() {
@@ -77,10 +100,10 @@ public class Client {
 				}
 
 				public void checkClientTrusted(
-					java.security.cert.X509Certificate[] certs, String authType) {}
+						java.security.cert.X509Certificate[] certs, String authType) {}
 
 				public void checkServerTrusted(
-					java.security.cert.X509Certificate[] certs, String authType) {}
+						java.security.cert.X509Certificate[] certs, String authType) {}
 			} };
 			keystore = KeyStore.getInstance("JKS");
 			keystore.load(new FileInputStream(keyStoreName), password);
@@ -89,7 +112,7 @@ public class Client {
 			context = SSLContext.getInstance("TLS");
 			context.init(keyManFact.getKeyManagers(), myTrustManager, null);
 			sslSocketFactory = context.getSocketFactory();
-			
+
 		} catch (NoSuchAlgorithmException e) {e.printStackTrace();
 		} catch (KeyManagementException e) {e.printStackTrace();
 		} catch (KeyStoreException e) {e.printStackTrace();
@@ -100,7 +123,10 @@ public class Client {
 		}
 
 	}
-
+	/**
+	 * Returns the username of the client.
+	 * @return - String of the username
+	 */
 	String getUsername() {return this.username;}
 
 	/*
@@ -116,9 +142,7 @@ public class Client {
 			display("Error connectiong to server:" + ec);
 			return false;
 		}
-
-		String msg = "Connection accepted " + socket.getInetAddress() + ":"
-				+ socket.getPort();
+		String msg = "Connection accepted " + socket.getInetAddress() + ":"+ socket.getPort();
 		display(msg);
 
 		/* Creating both Data Stream */
@@ -159,7 +183,9 @@ public class Client {
 	void sendMessage(ChatMessage msg_chat) throws Exception {
 		try {
 			String e = doEncrypt(msg_chat.getMessage());
-			// String d = doDecrypt(e);
+			//System.out.println(e+"kk");
+			//String d = doDecrypt(encryptionKey,e);
+			//System.out.println(d+"kk");
 			sOutput.writeObject(new ChatMessage(msg_chat.getType(), e));
 		} catch (IOException e) {
 			display("Exception writing to server: " + e);
@@ -172,88 +198,149 @@ public class Client {
 	 */
 	private void disconnect() {
 		try {
-			if (sInput != null)
-				sInput.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+			if (sInput != null) sInput.close();
+		} catch (Exception e) {	e.printStackTrace();}
 		try {
-			if (sOutput != null)
-				sOutput.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+			if (sOutput != null) sOutput.close();
+		} catch (Exception e) { e.printStackTrace();}
 		try {
-			if (socket != null)
-				socket.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+			if (socket != null) socket.close();
+		} catch (Exception e) {	e.printStackTrace();}
 
 		// inform the GUI
-		if (cg != null)
-			cg.connectionFailed();
+		if (cg != null)	cg.connectionFailed();
 	}
 
+	/**
+	 * Public method for calling from outside of the client class,
+	 * adds another level of security.
+	 * @param message - the message to encrypt.
+	 * @return - an encrypted version of the message
+	 * @throws Exception
+	 */
 	public String doEncrypt(String message) throws Exception {
 		return encrypt(message);
 	}
 
-	// A method that returns a String that is an encrypted version of the
-	// original
-	private String encrypt(String plainText) throws Exception {
-		String encryptionKey = "Bar12345Bar12345";
-		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(), "AES");
+	/**
+	 * Private method for calling from outside of the client class,
+	 * adds another level of security.
+	 * @param message - the message to encrypt.
+	 * @return - an encrypted version of the message
+	 * @throws Exception
+	 */
+	private String encrypt(String plainText) throws Exception{
 		Cipher cipher = Cipher.getInstance("AES");
-		cipher.init(Cipher.ENCRYPT_MODE, aesKey);
-
-		return new String(cipher.doFinal(plainText.getBytes()));
+		cipher.init(Cipher.ENCRYPT_MODE, key);
+		return Base64.getEncoder().encodeToString(cipher.doFinal(plainText.getBytes()));
 	}
 
+	/**
+	 * Public method for calling from outside of the client class,
+	 * adds another level of security.
+	 * param message - the message to decrypt.
+	 * @return - an decrypted version of the message
+	 * @throws Exception
+	 */
 	public String doDecrypt(String cipher) throws Exception {
 		return decrypt(cipher);
 	}
 
-	
-	private String decrypt(String cipherText) throws Exception {
-		String encryptionKey = "Bar12345Bar12345";
-		Key aesKey = new SecretKeySpec(encryptionKey.getBytes(), "AES");
-		Cipher cipher = Cipher.getInstance("AES");
-		cipher.init(Cipher.DECRYPT_MODE, aesKey);
+	/**
+	 * Private method for calling from outside of the client class,
+	 * adds another level of security. It uses AES decryption techniques
+	 * in order to encrypt a message. 
+	 * I used java's standard encryption methods.
+	 * param message - the message to decrypt.
+	 * @return - an decrypted version of the message
+	 * @throws Exception
+	 */
+	private String decrypt(String cipherText){
+		String encryptedValue = "";
+		try {
+			Cipher cipher = Cipher.getInstance("AES");
+			cipher.init(Cipher.DECRYPT_MODE, key,cipher.getParameters());
+			encryptedValue = new String(cipher.doFinal(Base64.getDecoder().decode(cipherText)));
 
-		return new String(cipher.doFinal(cipherText.getBytes()));
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+			encryptedValue =  "Sorry you're not allowed see this message";
+		} catch (InvalidKeyException e) {
+			encryptedValue =  "Sorry you're not allowed see this message";
+		} catch (IllegalBlockSizeException e) {
+			encryptedValue =  "Sorry you're not allowed see this message";
+		} catch (BadPaddingException e) {
+			encryptedValue =  "Sorry you're not allowed see this message";
+		} catch (InvalidAlgorithmParameterException e) {
+			encryptedValue =  "Sorry you're not allowed see this message";
+		}
+		return encryptedValue;
 	}
 
+	/**
+	 * Resets a client's key back to the original value.
+	 */
+	public void resetKey(){
+		key = new SecretKeySpec(defaultKey.getBytes(), "AES/CTR/NoPadding");
+	}
+
+	/**
+	 * Updates a client's key to that of the group's AES key
+	 * @param newKey - the new key to add
+	 */
+	public void updateKey(SecretKey newKey){
+		key = newKey;
+	}
 	/*
 	 * A class that waits for the message from the server and append them to the
 	 * JTextArea if we have a GUI or simply System.out.println() it in console
 	 * mode
 	 */
 	class ListenFromServer extends Thread {
-
 		public void run() {
 			while (true) {
 				try {
 					String msg = (String) sInput.readObject();
-					// if console mode print the message and add back the prompt
-					if (cg == null) {
-						// System.out.println(msg);
-						System.out.print("> ");
-					} else {
-						try {
-							cg.append(msg);
-						} catch (Exception e) {
-							e.printStackTrace();
+					String newAes = msg.substring(0, 4);
+					// if the message does not contain this value, then it is a
+					// normal message and we just want to send the message part
+					// and not the prefix
+					if(!newAes.equals("AES:")){
+						String[] parts = msg.split(" ");
+
+						String newMsg = parts[2];
+						newMsg = newMsg.substring(0,newMsg.length()-1);
+						String msg1 = doDecrypt(newMsg);
+						// if console mode print the message and add back the prompt
+						if (cg == null) {
+							System.out.print("> ");
+						} 
+						else {
+							try {
+								cg.append(parts[0] + " " + parts[1] + " " + msg1+"\n");
+							} catch (Exception e) {	e.printStackTrace(); }
 						}
 					}
+					// Else if it equals the reset message, then reset the keys.
+					else if(msg.equals("AES:Reset")){
+						resetKey();
+					}
+					// otherwise update the key with teh new value.
+					else{
+						String newKey = msg.substring(4, msg.length());
+						byte[] decodedKey = Base64.getDecoder().decode(newKey);
+						updateKey(new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES"));
+					}
+
 				} catch (IOException e) {
 					display("Server has close the connection: " + e);
-					if (cg != null)
-						cg.connectionFailed();
+					if (cg != null)	cg.connectionFailed();
 					break;
 				}
+
 				// can't happen with a String object but need the catch anyhow
 				catch (ClassNotFoundException e2) {
+				} catch (Exception e1) {
+					e1.printStackTrace();
 				}
 			}
 		}
